@@ -1,0 +1,38 @@
+body {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loader {
+    height: 200px;
+    width: 200px;
+    border: 12px solid #e3e3e3;
+    border-radius: 50%;
+    border-right-color: #4070f4;
+    animation: loadingstyle 1s ease infinite;
+}
+
+.content {
+    display: none;
+}
+
+.hidden {
+    opacity:  0;
+    transition: opacity 1s ease-in-out;
+}
+
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes loadingstyle {
+    100%{
+        transform: rotate(360deg);
+
+    }
+}
