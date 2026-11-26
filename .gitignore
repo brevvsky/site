@@ -1,0 +1,8 @@
+.private/
+.dev.vars
+.env*
+!.env.example
+node_modules/
+.wrangler/
+*.log
+__pycache__/
