@@ -33,7 +33,7 @@ async function download(productId, code, button, status) {
   button.disabled = true; status.textContent = 'Preparing your download…';
   try {
     const response = await fetch('./api/download', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ productId, code }), cache:'no-store', credentials:'omit' });
-    if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.error || 'Download is temporarily unavailable. Please try again.'); }
+    if (!response.ok) { const body = await response.json().catch(() => ({})); const ref=/^[A-Z][A-Z0-9_]{0,40}$/.test(body.code || '') ? ` Reference: ${body.code}.` : ''; throw new Error((body.error || 'Download is temporarily unavailable. Please try again.')+ref); }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url;
     link.download = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '')?.[1] || `${productId}.rbxmx`;

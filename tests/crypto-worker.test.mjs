@@ -33,3 +33,22 @@ test('cross-site requests, brute force, traversal and missing configuration are 
 });
 test('storage and authentication errors return a safe error without leaking secrets',async()=>{const f=await setup();const response=await deliver(request(),f.env,async()=>{throw Error('token: SECRET');});assert.equal(response.status,503);assert(!(await response.text()).includes('SECRET'));});
 test('license hashes are specific to the product',async()=>{assert.notEqual(await hashCode('a',code),await hashCode('b',code));});
+for(const status of [401,403,429])test(`GitHub ${status} gets a safe stage reference`,async()=>{
+  const f=await setup();const response=await deliver(request(),f.env,async()=>new Response('PRIVATE DETAILS',{status}));
+  assert.equal(response.status,503);const body=await response.json();assert.equal(body.code,`INDEX_READ_${status}`);assert(!JSON.stringify(body).includes('PRIVATE DETAILS'));
+});
+test('a different Cloudflare key is distinguished from an invalid license',async()=>{
+  const f=await setup();f.env.VAULT_KEY=randomBytes(32).toString('base64');const response=await deliver(request(),f.env,f.fetcher);
+  assert.equal(response.status,503);assert.equal((await response.json()).code,'INDEX_DECRYPT');
+});
+test('a missing personal file has a different reference from a missing license index',async()=>{
+  const f=await setup();f.storage.delete(`${file}.enc`);const response=await deliver(request(),f.env,f.fetcher);
+  assert.equal(response.status,503);assert.equal((await response.json()).code,'FILE_READ_404');
+});
+test('a corrupted personal file gets a decryption reference without returning model bytes',async()=>{
+  const f=await setup();f.storage.set(`${file}.enc`,'invalid ciphertext');const response=await deliver(request(),f.env,f.fetcher);
+  assert.equal(response.status,503);assert.equal((await response.json()).code,'FILE_DECRYPT');
+});
+test('null request bodies are rejected without throwing an unhandled error',async()=>{
+  const f=await setup();assert.equal((await deliver(request(null),f.env,f.fetcher)).status,400);
+});

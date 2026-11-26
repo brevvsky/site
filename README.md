@@ -65,7 +65,8 @@ The repository includes a ready-to-deploy Worker with static assets. The local a
 2. Authenticate Wrangler from this project directory:
 
    ```powershell
-   npx wrangler login
+   npm install
+   npm run cloudflare:login
    ```
 
 3. In Local Studio save the private repository and both tokens. Add your assets and licenses.
@@ -76,6 +77,8 @@ The repository includes a ready-to-deploy Worker with static assets. The local a
    ```
 
 The command synchronizes the encrypted vault, fills in the private repository name in `wrangler.jsonc`, deploys the storefront, then installs `VAULT_KEY` and the read-only `GITHUB_TOKEN` as Cloudflare secrets through stdin. It never sends the local sync token to Cloudflare. On the first deployment, download requests return 503 until both secrets are configured. If any step fails, the script reports failure; resolve the error and rerun it. Wrangler prints the real `workers.dev` address. Worker names must be available in your Cloudflare account; change `name` in `wrangler.jsonc` if necessary.
+
+On Windows PowerShell, use `npm.cmd` in place of `npm` if script execution is restricted. The `cloudflare:login`, `cloudflare:whoami`, and `deploy` scripts run the installed Wrangler entry point directly. Run `npm run cloudflare:whoami` to check which account is authenticated.
 
 For new assets, new images, or catalog edits: save, then `npm run publish`. For issuing/editing/revoking licenses only: save, then **Sync private vault**; a storefront redeploy is unnecessary. Changes are not live until the sync succeeds. GitHub token expiry interrupts syncing or downloading until the corresponding token is replaced and secrets are republished.
 
@@ -103,6 +106,16 @@ Back up the entire `.private` directory to storage you control, especially `vaul
 The current Local Studio edits its local snapshot. On a new computer, restore your backed-up `.private` directory and the same public catalog/uploads before using the panel. It does not automatically pull and reconcile remote vault changes. Use one writer computer at a time. A restored stale snapshot could reinstate old license settings on the next sync.
 
 ## Validation
+
+If a licensed download returns a temporary-unavailability error, run:
+
+```powershell
+npm.cmd run diagnose
+```
+
+The owner-only command checks the saved read-only GitHub token, remote license synchronization, encryption integrity of the assigned file, and the deployed download endpoint. It prints safe OK/FAIL results and HTTP statuses. It never prints license codes, tokens, encryption keys, or model contents. It runs on your computer and requires network access to GitHub and the public Worker. For another deployment URL, run `npm.cmd run diagnose -- https://your-worker.your-account.workers.dev`.
+
+The Worker also returns a safe failure reference, such as `INDEX_READ_401` (the deployed GitHub token was rejected), `INDEX_DECRYPT` (the deployed Worker cannot decrypt the license index), or `FILE_READ_404` (the assigned file could not be read). The storefront displays this reference beside the error, and owner diagnostics explain it. Deploy the updated Worker with `npm.cmd run publish` before using these references to diagnose a live site. If diagnostics say the Worker predates detailed diagnostics, the public deployment is still running the older version.
 
 ```powershell
 npm test

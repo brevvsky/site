@@ -1,11 +1,13 @@
 import { spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { initialize, root } from '../local/vault.mjs';
 import { readSettings, syncVault } from '../local/github.mjs';
 const key=await initialize(),settings=await readSettings(key);
-function wrangler(args,input){return new Promise((resolve,reject)=>{const command=process.platform==='win32'?'npm.cmd':'npm';const child=spawn(command,['exec','--yes','--','wrangler',...args],{cwd:root,stdio:[input?'pipe':'inherit','inherit','inherit'],shell:process.platform==='win32',windowsHide:true});if(input)child.stdin.end(input);child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error(`Wrangler exited with code ${code}.`)));});}
+const wranglerPath=join(root,'node_modules/wrangler/bin/wrangler.js');
+function wrangler(args,input){return new Promise((resolve,reject)=>{const child=spawn(process.execPath,[wranglerPath,...args],{cwd:root,stdio:[input?'pipe':'inherit','inherit','inherit'],windowsHide:true});if(input)child.stdin.end(input);child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error(`Wrangler exited with code ${code}.`)));});}
 try {
+  try {await access(wranglerPath);}catch{throw Error('Install the publishing tools first: npm install');}
   if(!settings.deliveryToken)throw Error('Save a separate read-only delivery token in Local Studio before publishing. It needs Contents: read access to the private vault only.');
   console.log('Syncing encrypted private vault…');
   console.log((await syncVault(settings)).message);
