@@ -33,7 +33,7 @@ async function admin(req,res,path) {
   const data=await body(req);
   const state=await readState(key),catalog=await readCatalog();
   if(path==='/local/product') {
-    const id=text(data.id,64);if(!validId(id))throw Error('Asset ID must contain lowercase letters, numbers, and hyphens.');
+    const id=text(data.id,64);if(!validId(id)||id==='owner')throw Error('Asset ID must contain lowercase letters, numbers, and hyphens. The ID owner is reserved.');
     const existing=catalog.products.find(p=>p.id===id);
     if(!['Vehicle','System'].includes(data.category)||!['free','paid'].includes(data.access))throw Error('Choose a category and access type.');
     const title=text(data.title,120);if(!title)throw Error('Title is required.');

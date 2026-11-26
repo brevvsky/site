@@ -79,7 +79,7 @@ The command synchronizes the encrypted vault, fills in the private repository na
 
 For new assets, new images, or catalog edits: save, then `npm run publish`. For issuing/editing/revoking licenses only: save, then **Sync private vault**; a storefront redeploy is unnecessary. Changes are not live until the sync succeeds. GitHub token expiry interrupts syncing or downloading until the corresponding token is replaced and secrets are republished.
 
-The frontend and download API share an origin. Codes are sent only in POST request bodies and are never placed in download URLs, analytics, or logs. The Worker rate limiter permits ten download attempts per minute per IP. There is no analytics integration. Cloudflare observability is disabled in the provided configuration. A visitor receives model bytes directly, with no-store headers, never a GitHub token, encryption key, permanent download URL, or redirect to a repository file.
+The frontend and download API share an origin. Codes are sent only in POST request bodies and are never placed in download URLs, analytics, or logs. The Worker rate limiter targets ten download attempts per minute per IP per Cloudflare location; Cloudflare describes these limits as approximate. There is no analytics integration. Cloudflare observability is disabled in the provided configuration. A visitor receives model bytes directly, with no-store headers, never a GitHub token, encryption key, permanent download URL, or redirect to a repository file.
 
 ## Costs and limits
 

@@ -170,6 +170,8 @@ def binary_stamp(data, key):
             class_id = u32(payload, 0)
             name, offset = read_string(payload, 4)
             count = u32(payload, offset + 1)
+            if count > 1000000:
+                raise ValueError('Too many instances in a single class.')
             classes[class_id] = (name.decode(), count)
         chunks.append((tag, payload, data[start:end]))
         pos = end
