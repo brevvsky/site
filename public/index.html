@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Scripted vehicles and systems for your next Roblox experience. Explore assets by Brevvsky.">
+  <meta name="theme-color" content="#0a0e11"><title>BREVVSKY — Roblox assets</title>
+  <link rel="icon" href="./assets/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header wrap">
+    <a class="brand" href="./" aria-label="Brevvsky home"><img src="./assets/mark.svg" alt="" width="32" height="32">BREVVSKY<span class="brand-label">ASSET STUDIO</span></a>
+    <nav aria-label="Main navigation"><a href="#collection">Collection</a><a href="#access">How it works</a><button class="button small ghost" id="open-license">My license <span class="key-icon" aria-hidden="true">⌘</span></button></nav>
+  </header>
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy"><p class="eyebrow"><span class="line"></span>INDEPENDENT ROBLOX CREATOR</p><h1>Your world.<br>More <em>drive.</em></h1><p class="hero-description">Detailed vehicles. Purpose-built systems.<br>Assets made to bring your next experience to life.</p><a class="button primary" href="#collection">Explore the collection</a><div class="hero-meta"><span>ROBLOX STUDIO</span><span>VEHICLES & SYSTEMS</span></div></div>
+      <div class="hero-visual"><div class="visual-grid"></div><span class="visual-label">DESIGN / ENGINEER / CREATE</span><img src="./assets/vehicle.svg" alt="Stylized sports car illustration in a dark design studio"><div class="visual-caption"><span class="caption-title">Every detail.<br>Built with intention.</span><span class="caption-tag">BREVVSKY<br>ORIGINAL ASSETS</span></div></div>
+    </section>
+    <div class="feature-strip"><div class="wrap"><span><b>01</b> Crafted for Roblox</span><span><b>02</b> Ready to build with</span><span><b>03</b> Personal license access</span></div></div>
+    <section class="collection wrap" id="collection">
+      <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>Find your next upgrade<span>.</span></h2></div><span id="asset-count" class="mono">LOADING COLLECTION</span></div>
+      <div class="catalog-tools"><div class="tabs" role="group" aria-label="Filter category"><button class="tab active" data-category="All" aria-pressed="true">All assets</button><button class="tab" data-category="Vehicle" aria-pressed="false">Vehicles</button><button class="tab" data-category="System" aria-pressed="false">Systems</button></div><div class="search-tools"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search assets" aria-label="Search assets"></label><select id="access-filter" aria-label="Filter access"><option value="all">All access</option><option value="free">Free</option><option value="paid">Licensed</option></select></div></div>
+      <div id="catalog" class="product-grid" aria-live="polite"></div>
+    </section>
+    <section class="access-section wrap" id="access"><div><p class="eyebrow">A SIMPLE WAY IN</p><h2>From preview<br>to your next project<span>.</span></h2><p>Take a closer look, get your personal license,<br>and bring something new to your world.</p></div><ol class="steps"><li><span>01</span><div><h3>Find your asset</h3><p>Browse vehicles and systems. Open an asset to explore its previews and details.</p></div></li><li><span>02</span><div><h3>Get your personal code</h3><p>Follow the instructions on the asset page. Your creator will provide your individual license or access code.</p></div></li><li><span>03</span><div><h3>Download. Create.</h3><p>Enter your code to download your copy. Free assets are available without a license.</p></div></li></ol></section>
+  </main>
+  <footer class="wrap"><a class="brand" href="./">BREVVSKY<span class="brand-label">ASSET STUDIO</span></a><p>Made for the worlds you haven’t built yet.</p><span class="mono">© <span id="year"></span> BREVVSKY</span></footer>
+  <dialog id="product-dialog" aria-labelledby="product-title"><button class="close" aria-label="Close product">×</button><div id="product-detail"></div></dialog>
+  <dialog id="license-dialog" aria-labelledby="license-title"><button class="close" aria-label="Close license access">×</button><p class="eyebrow">PERSONAL ACCESS</p><h2 id="license-title">Your next build awaits.</h2><p>Select your asset and enter the license or access code you received from the creator.</p><form id="license-form"><label>Asset<select name="productId" id="license-product" required></select></label><label>License / access code<input name="code" type="password" autocomplete="off" spellcheck="false" placeholder="BRV-…" maxlength="128" required></label><button class="button primary" type="submit">Unlock download</button><p class="form-status" role="status"></p></form><p class="fine-print">Your code is personal. Please keep it private.</p></dialog>
+  <noscript><p class="wrap">Please enable JavaScript to browse the collection and access downloads.</p></noscript>
+</body></html>

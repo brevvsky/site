@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { stampModel } from '../local/vault.mjs';
+import { spawnSync } from 'node:child_process';
+const xml=`<roblox version="4"><Item class="Model" referent="root"><Properties><string name="Name">Example &amp; model</string></Properties><Item class="MeshPart" referent="part"><Properties><string name="Name">Body</string><BinaryString name="AttributesSerialize">AQAAAAUAAABTcGVlZAYAAAAAAAD4Pw==</BinaryString></Properties></Item><Item class="Script" referent="script"><Properties><ProtectedString name="Source"><![CDATA[print("keep <this> & that")]]></ProtectedString></Properties></Item><Item class="LocalScript" referent="local"><Properties/></Item><Item class="ModuleScript" referent="module"><Properties><ProtectedString name="Source">return 7</ProtectedString></Properties></Item></Item></roblox>`;
+test('XML stamps BasePart and BaseScript descendants while retaining values, scripts and unrelated attributes',async()=>{
+  const first=await stampModel(Buffer.from(xml),'BUYER-ALPHA-KEY','.rbxmx');assert.equal(first.changed,3);
+  const out=first.bytes.toString();assert.match(out,/return 7/);assert.match(out,/print\("keep &lt;this&gt; &amp; that"\)/);assert.match(out,/Example &amp; model/);
+  const attrs=[...out.matchAll(/<BinaryString name="AttributesSerialize">([^<]+)<\/BinaryString>/g)].map(m=>Buffer.from(m[1],'base64'));
+  assert.equal(attrs.length,3);assert.equal(attrs[0].readUInt32LE(0),2);assert.equal(attrs[0].readDoubleLE(14),1.5);assert(attrs.every(b=>b.includes(Buffer.from('BUYER-ALPHA-KEY'))));
+  const second=await stampModel(first.bytes,'BUYER-BETA-KEY','.rbxmx');assert(!second.bytes.toString().includes(Buffer.from('BUYER-ALPHA-KEY').toString('base64')));const attrs2=[...second.bytes.toString().matchAll(/<BinaryString name="AttributesSerialize">([^<]+)<\/BinaryString>/g)].map(m=>Buffer.from(m[1],'base64'));assert.equal(attrs2[0].readUInt32LE(0),2);assert(attrs2.every(b=>b.includes(Buffer.from('BUYER-BETA-KEY'))&&!b.includes(Buffer.from('BUYER-ALPHA-KEY'))));
+});
+test('masters without eligible instances, malformed XML and entities are rejected',async()=>{for(const input of ['<roblox version="4"><Item class="Folder"/></roblox>','not xml','<!DOCTYPE roblox [<!ENTITY x "secret">]><roblox version="4"/>'])await assert.rejects(stampModel(Buffer.from(input),'a-valid-license','.rbxmx'));});
+const u32=n=>{const b=Buffer.alloc(4);b.writeUInt32LE(n);return b;};
+const str=s=>{const b=Buffer.from(s);return Buffer.concat([u32(b.length),b]);};
+const chunk=(tag,payload,compressed)=>Buffer.concat([Buffer.from(tag),u32(compressed?.length||0),u32(payload.length),u32(0),compressed||payload]);
+function binary(compressed=false){const header=Buffer.alloc(32);Buffer.from('<roblox!\x89\xff\r\n\x1a\n','latin1').copy(header);header.writeUInt32LE(1,16);header.writeUInt32LE(1,20);const inst=Buffer.concat([u32(0),str('Part'),Buffer.from([0]),u32(1),Buffer.alloc(4)]),prop=Buffer.concat([u32(0),str('Name'),Buffer.from([1]),str('Original body')]);const literal=Buffer.concat([Buffer.from([0xf0,inst.length-15]),inst]);return Buffer.concat([header,chunk('INST',inst,compressed?literal:null),chunk('PROP',prop),chunk('PRNT',Buffer.from([0,1,0,0,0,0,0,0,0,1,0,0,0])),chunk('END\0',Buffer.from('</roblox>'))]);}
+for(const compressed of [false,true])test(`binary ${compressed?'LZ4':'uncompressed'} model preserves original chunks and gets a string license attribute`,async()=>{const original=binary(compressed),out=await stampModel(original,'BUYER-ONE-123456','.rbxm');assert.equal(out.changed,1);assert(out.bytes.includes(Buffer.from('Original body')));assert(out.bytes.includes(Buffer.from('SpecialLicense')));assert(out.bytes.includes(Buffer.from('BUYER-ONE-123456')));assert(out.bytes.subarray(0,32).equals(original.subarray(0,32)));const second=await stampModel(out.bytes,'BUYER-TWO-123456','.rbxm');assert(second.bytes.includes(Buffer.from('BUYER-TWO-123456')));assert(!second.bytes.includes(Buffer.from('BUYER-ONE-123456')));});
+test('Zstandard-compressed binary models are supported with a bounded decompressor',async()=>{
+  const original=binary(),size=original.readUInt32LE(40),inst=original.subarray(48,48+size);
+  const result=spawnSync(process.env.PYTHON||'python',['-I','-c','import sys; from compression import zstd; sys.stdout.buffer.write(zstd.compress(sys.stdin.buffer.read()))'],{input:inst,windowsHide:true});
+  assert.equal(result.status,0,result.stderr.toString());
+  const model=Buffer.concat([original.subarray(0,32),chunk('INST',inst,result.stdout),original.subarray(48+size)]);
+  const out=await stampModel(model,'BRV-ZSTD-BUYER','.rbxm');assert.equal(out.changed,1);assert(out.bytes.includes(Buffer.from('BRV-ZSTD-BUYER')));
+});
+test('binary corruption is rejected',async()=>{await assert.rejects(stampModel(Buffer.from('garbage'),'some-license','.rbxm'));const bad=binary();bad.writeUInt32LE(99999999,40);await assert.rejects(stampModel(bad,'some-license','.rbxm'));});
+export {xml};
