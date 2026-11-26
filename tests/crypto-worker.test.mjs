@@ -19,7 +19,7 @@ async function setup({active=true,expiresAt=null,access='paid',limiter=true}={})
 }
 const request=(body={productId,code},headers={})=>new Request('https://studio.test/api/download',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://studio.test',...headers},body:JSON.stringify(body)});
 test('a valid personal license returns only its assigned file without exposing repository URLs',async()=>{
-  const f=await setup(),response=await deliver(request(),f.env,f.fetcher);assert.equal(response.status,200);assert.equal(await response.text(),'personal model bytes');assert.equal(response.headers.get('Cache-Control'),'no-store');assert.match(response.headers.get('Content-Disposition'),/apex-coupe.rbxm/);assert.equal(f.requests.length,2);assert(f.requests.every(r=>r.options.redirect==='error'));assert.equal(response.headers.get('Access-Control-Allow-Origin'),null);
+  const f=await setup(),response=await deliver(request(),f.env,f.fetcher);assert.equal(response.status,200);assert.equal(await response.text(),'personal model bytes');assert.equal(response.headers.get('Cache-Control'),'no-store');assert.match(response.headers.get('Content-Disposition'),/apex-coupe.rbxm/);assert.equal(f.requests.length,2);assert(f.requests.every(r=>r.options.redirect==='manual'));assert.equal(response.headers.get('Access-Control-Allow-Origin'),null);
 });
 for(const [name,options,body] of [['incorrect key',{}, {productId,code:'wrong'}],['revoked key',{active:false}],['expired key',{expiresAt:'2020-01-01T00:00:00.000Z'}],['code for another product',{}, {productId:'other-product',code}]])test(`${name} cannot retrieve a file`,async()=>{const f=await setup(options),response=await deliver(request(body),f.env,f.fetcher);assert.equal(response.status,403);assert(!f.requests.some(r=>r.url.includes(file)));});
 test('free assets require no code and use the free file only',async()=>{const f=await setup({access:'free'}),response=await deliver(request({productId,code:''}),f.env,f.fetcher);assert.equal(response.status,200);});
@@ -51,4 +51,21 @@ test('a corrupted personal file gets a decryption reference without returning mo
 });
 test('null request bodies are rejected without throwing an unhandled error',async()=>{
   const f=await setup();assert.equal((await deliver(request(null),f.env,f.fetcher)).status,400);
+});
+test('delivery works with the redirect modes supported by the Workers runtime',async()=>{
+  const f=await setup();
+  const workersFetch=(url,options)=>{
+    if(!['manual','follow'].includes(options.redirect))throw new TypeError('Invalid redirect value, must be one of follow or manual.');
+    return f.fetcher(url,options);
+  };
+  const response=await deliver(request(),f.env,workersFetch);
+  assert.equal(response.status,200);assert.equal(await response.text(),'personal model bytes');
+});
+for(const status of [301,302,307,308])test(`GitHub redirect ${status} is refused without forwarding the token`,async()=>{
+  const f=await setup();let requests=0;
+  const response=await deliver(request(),f.env,async(url,options)=>{
+    requests++;assert.equal(new URL(url).hostname,'api.github.com');assert.equal(options.redirect,'manual');
+    return new Response('',{status,headers:{Location:'https://untrusted.example/private'}});
+  });
+  assert.equal(response.status,503);assert.equal((await response.json()).code,'INDEX_READ_REDIRECT');assert.equal(requests,1);
 });

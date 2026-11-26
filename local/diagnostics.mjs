@@ -18,6 +18,7 @@ export function workerHint(code) {
   const match=/^(INDEX|FILE)_READ_(401|403|404|429)$/.exec(code);
   if(match)return `Cloudflare private storage: ${storageHint(Number(match[2]))}`;
   if(/^(INDEX|FILE)_READ_NETWORK$/.test(code))return 'The Cloudflare Worker failed while fetching private storage. The local GitHub checks passed; inspect the Worker fetch configuration.';
+  if(/^(INDEX|FILE)_READ_REDIRECT$/.test(code))return 'GitHub returned an unexpected redirect, which was refused. Check the repository name and branch.';
   if(code==='INDEX_METADATA')return 'The remote license index has invalid metadata.';
   return 'The Worker returned a delivery error. Share this safe reference with the creator.';
 }
@@ -77,7 +78,7 @@ export async function diagnoseDelivery({key, settings, state, siteUrl, fetcher =
     const response = await timedFetch(endpoint.href, {method:'POST', redirect:'error', cache:'no-store', headers:{'Content-Type':'application/json','User-Agent':'brevvsky-owner-diagnostics'}, body:JSON.stringify({productId, code:index.access === 'free' ? '' : license.code})});
     if (!response.ok) {
       const body=await response.json().catch(()=>({}));
-      const safeCode=/^(CONFIG_(SECRETS|REPOSITORY|LIMITER)|INDEX_(READ_(401|403|404|429|NETWORK)|DECRYPT|METADATA)|FILE_(READ_(401|403|404|429|NETWORK)|DECRYPT)|DOWNLOAD_RESPONSE)$/.test(body?.code || '')?body.code:null;
+      const safeCode=/^(CONFIG_(SECRETS|REPOSITORY|LIMITER)|INDEX_(READ_(401|403|404|429|NETWORK|REDIRECT)|DECRYPT|METADATA)|FILE_(READ_(401|403|404|429|NETWORK|REDIRECT)|DECRYPT)|DOWNLOAD_RESPONSE)$/.test(body?.code || '')?body.code:null;
       const hint=safeCode?`[${safeCode}] ${workerHint(safeCode)}`:response.status===429?'Download attempts are rate limited; wait a minute.':response.headers.get('X-Asset-Delivery-Version')?'The Worker returned an error without a delivery reference.':'The deployed Worker predates detailed diagnostics. Run npm run publish to deploy the updated Worker and secrets, then diagnose again.';
       result('Cloudflare download', false, `HTTP ${response.status}. ${hint}`);
       return false;

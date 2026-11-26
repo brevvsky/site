@@ -117,6 +117,8 @@ The owner-only command checks the saved read-only GitHub token, remote license s
 
 The Worker also returns a safe failure reference, such as `INDEX_READ_401` (the deployed GitHub token was rejected), `INDEX_DECRYPT` (the deployed Worker cannot decrypt the license index), or `FILE_READ_404` (the assigned file could not be read). The storefront displays this reference beside the error, and owner diagnostics explain it. Deploy the updated Worker with `npm.cmd run publish` before using these references to diagnose a live site. If diagnostics say the Worker predates detailed diagnostics, the public deployment is still running the older version.
 
+GitHub requests use `redirect: 'manual'` and reject 3xx responses explicitly. Workers do not support the Fetch API's `redirect: 'error'` mode; using it throws before contacting GitHub. Runtime regression coverage is available with `npm.cmd run test:worker`. It executes the encrypted delivery flow using real workerd Request, Response, and Web Crypto APIs, with fake storage and test-only credentials, without outbound network requests.
+
 ```powershell
 npm test
 npm run check

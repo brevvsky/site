@@ -1,14 +1,16 @@
 import { decrypt, decode, hashCode } from '../shared/crypto.mjs';
 const idPattern = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const filePattern = /^[a-f0-9-]{36}$/;
-export const DELIVERY_VERSION = '2';
+export const DELIVERY_VERSION = '3';
 const security = {'X-Asset-Delivery-Version':DELIVERY_VERSION,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json = (data,status=200) => new Response(JSON.stringify(data),{status,headers:{...security,'Content-Type':'application/json'}});
 const unavailable = code => json({error:'Download is temporarily unavailable. Please try again or contact the creator.',code},503);
-const storageCode = (stage,error) => `${stage}_${[401,403,404,429].includes(error.status)?error.status:'NETWORK'}`;
+const storageCode = (stage,error) => `${stage}_${error.code==='STORAGE_REDIRECT'?'REDIRECT':[401,403,404,429].includes(error.status)?error.status:'NETWORK'}`;
 export async function githubRead(path, env, fetcher = fetch) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(env.GITHUB_REPOSITORY || '')) throw Error('Repository is not configured.');
-  const response = await fetcher(`https://api.github.com/repos/${env.GITHUB_REPOSITORY}/contents/vault/${path}?ref=${encodeURIComponent(env.GITHUB_BRANCH || 'main')}`, {headers:{Authorization:`Bearer ${env.GITHUB_TOKEN}`,Accept:'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'brevvsky-asset-delivery'},cache:'no-store',redirect:'error'});
+  // Workers support manual/follow only. Never follow a redirect with the vault token.
+  const response = await fetcher(`https://api.github.com/repos/${env.GITHUB_REPOSITORY}/contents/vault/${path}?ref=${encodeURIComponent(env.GITHUB_BRANCH || 'main')}`, {headers:{Authorization:`Bearer ${env.GITHUB_TOKEN}`,Accept:'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'brevvsky-asset-delivery'},cache:'no-store',redirect:'manual'});
+  if(response.status>=300 && response.status<400){await response.body?.cancel();const error=Error('Private storage redirect refused.');error.code='STORAGE_REDIRECT';error.status=response.status;throw error;}
   if (!response.ok) {const error=Error('Private storage unavailable.');error.status=response.status;throw error;}
   const text = await response.text();
   if(text.length > 96 * 1024 * 1024) throw Error('File exceeds delivery limits.');
