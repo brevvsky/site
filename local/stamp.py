@@ -161,7 +161,10 @@ def binary_stamp(data, key):
                     from compression import zstd
                 except ImportError:
                     raise ValueError('Zstandard-compressed RBXM requires Python 3.14+. You can also export RBXMX from Studio.')
-                payload = zstd.decompress(payload, max_output_size=size)
+                decoder = zstd.ZstdDecompressor()
+                payload = decoder.decompress(payload, max_length=size + 1)
+                if not decoder.eof or decoder.unused_data:
+                    raise ValueError('Invalid or oversized Zstandard frame.')
             else:
                 payload = lz4_decode(payload, size)
         if len(payload) != size:
