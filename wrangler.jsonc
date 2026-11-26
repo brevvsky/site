@@ -4,15 +4,47 @@
   "main": "worker/index.mjs",
   "compatibility_date": "2026-11-26",
   "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "USAGE",
+        "class_name": "LicenseUsageStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "license-usage-v1",
+      "new_sqlite_classes": [
+        "LicenseUsageStore"
+      ]
+    }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/admin", "/admin/*", "/local/*"]
+    "run_worker_first": [
+      "/api/*",
+      "/admin",
+      "/admin/*",
+      "/local/*"
+    ]
   },
   "vars": {
     "GITHUB_REPOSITORY": "REPLACE_OWNER/REPLACE_PRIVATE_REPOSITORY",
     "GITHUB_BRANCH": "main"
   },
-  "ratelimits": [{ "name": "DOWNLOAD_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
-  "observability": { "enabled": false }
+  "ratelimits": [
+    {
+      "name": "DOWNLOAD_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": false
+  }
 }

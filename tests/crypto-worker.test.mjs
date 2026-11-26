@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { encrypt,decrypt,utf8,decode,hashCode } from '../shared/crypto.mjs';
 import { deliver } from '../worker/index.mjs';
+import { ownerHeaders } from '../shared/owner-auth.mjs';
 const key=randomBytes(32).toString('base64'),file='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',productId='apex-coupe',code='BRV-TEST-EXCLUSIVE-BUYER';
 test('AES-GCM hides plaintext, uses random IVs and binds files to their identity',async()=>{
   const first=await encrypt(utf8('secret model'),key,'file:a'),second=await encrypt(utf8('secret model'),key,'file:a');
@@ -13,9 +14,10 @@ test('AES-GCM hides plaintext, uses random IVs and binds files to their identity
 async function setup({active=true,expiresAt=null,access='paid',limiter=true}={}) {
   const index={version:1,access,freeFile:access==='free'?file:null,extension:'.rbxm',licenses:{[await hashCode(productId,code)]:{active,expiresAt,file}}};
   const storage=new Map([[`${productId}.enc`,await encrypt(utf8(JSON.stringify(index)),key,`index:${productId}`)],[`${file}.enc`,await encrypt(utf8('personal model bytes'),key,`file:${file}`)]]),requests=[];
-  const env={VAULT_KEY:key,GITHUB_TOKEN:'test-only-token',GITHUB_REPOSITORY:'test/private',GITHUB_BRANCH:'main',DOWNLOAD_LIMITER:{limit:async()=>({success:limiter})}};
+  const usage=[];
+  const env={VAULT_KEY:key,GITHUB_TOKEN:'test-only-token',GITHUB_REPOSITORY:'test/private',GITHUB_BRANCH:'main',DOWNLOAD_LIMITER:{limit:async()=>({success:limiter})},USAGE:{idFromName:name=>name,get:()=>({fetch:async(url,options)=>{usage.push(JSON.parse(options.body));return Response.json({ok:true});}})}};
   const fetcher=async(url,options)=>{requests.push({url,options});const name=new URL(url).pathname.split('/').pop();return storage.has(name)?new Response(storage.get(name)):new Response('',{status:404});};
-  return {env,fetcher,requests,storage};
+  return {env,fetcher,requests,storage,usage};
 }
 const request=(body={productId,code},headers={})=>new Request('https://studio.test/api/download',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://studio.test',...headers},body:JSON.stringify(body)});
 test('a valid personal license returns only its assigned file without exposing repository URLs',async()=>{
@@ -68,4 +70,27 @@ for(const status of [301,302,307,308])test(`GitHub redirect ${status} is refused
     return new Response('',{status,headers:{Location:'https://untrusted.example/private'}});
   });
   assert.equal(response.status,503);assert.equal((await response.json()).code,'INDEX_READ_REDIRECT');assert.equal(requests,1);
+});
+test('a successful licensed file delivery records exactly one anonymous usage',async()=>{
+  const f=await setup();assert.equal((await deliver(request(),f.env,f.fetcher)).status,200);
+  assert.deepEqual(f.usage,[{hash:await hashCode(productId,code)}]);
+  assert(!JSON.stringify(f.usage).includes(code));
+});
+test('invalid licenses, failed files, and free assets do not increase license usage',async()=>{
+  const f=await setup();assert.equal((await deliver(request({productId,code:'wrong'}),f.env,f.fetcher)).status,403);
+  f.storage.delete(`${file}.enc`);assert.equal((await deliver(request(),f.env,f.fetcher)).status,503);assert.equal(f.usage.length,0);
+  const free=await setup({access:'free'});assert.equal((await deliver(request({productId,code:''}),free.env,free.fetcher)).status,200);assert.equal(free.usage.length,0);
+});
+test('only an authenticated owner probe can skip the counter',async()=>{
+  const f=await setup(),body={productId,code};
+  assert.equal((await deliver(request(body,{'X-Owner-Probe':'1'}),f.env,f.fetcher)).status,401);
+  const headers=await ownerHeaders(key,'/api/download',JSON.stringify(body));
+  assert.equal((await deliver(request(body,{'X-Owner-Probe':'1',...headers}),f.env,f.fetcher)).status,200);assert.equal(f.usage.length,0);
+  const bad={productId,code:'wrong'};
+  const badAuth=await ownerHeaders(key,'/api/download',JSON.stringify(bad));
+  assert.equal((await deliver(request(bad,{'X-Owner-Probe':'1',...badAuth}),f.env,f.fetcher)).status,403);assert.equal(f.usage.length,0);
+});
+test('a counter failure prevents issuing an uncounted successful download',async()=>{
+  const f=await setup();delete f.env.USAGE;
+  const response=await deliver(request(),f.env,f.fetcher);assert.equal(response.status,503);assert.equal((await response.json()).code,'USAGE_WRITE');
 });

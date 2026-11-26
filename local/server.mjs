@@ -4,6 +4,7 @@ import { join, extname, resolve, sep } from 'node:path';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { root, privateRoot, initialize, readState, writeState, readCatalog, writeCatalog, atomic, generateCode, storeFile, getFile, stampModel, modelExtension, MAX_MODEL } from './vault.mjs';
 import { readSettings, writeSettings, syncVault } from './github.mjs';
+import { fetchLicenseUsage, storefrontUrl, defaultStorefront } from './usage.mjs';
 import { pathToFileURL } from 'node:url';
 const key=await initialize(), port=Number(process.env.PORT||4317);
 const origin=`http://127.0.0.1:${port}`, launchToken=randomBytes(32).toString('hex'), session=randomBytes(32).toString('hex');
@@ -27,7 +28,11 @@ async function admin(req,res,path) {
   if(!safeEqual(cookie,session))return send(res,401,{error:'Open the private admin link from your terminal.'});
   if(req.method==='GET'&&path==='/local/state') {
     const state=await readState(key),catalog=await readCatalog(),settings=await readSettings(key);
-    return send(res,200,{catalog,licenses:state.licenses,settings:{repository:settings.repository||'',branch:settings.branch||'main',hasToken:!!settings.token,hasDeliveryToken:!!settings.deliveryToken},hasProducts:Object.keys(state.products)});
+    return send(res,200,{catalog,licenses:state.licenses,settings:{repository:settings.repository||'',branch:settings.branch||'main',storefrontUrl:settings.storefrontUrl||defaultStorefront,hasToken:!!settings.token,hasDeliveryToken:!!settings.deliveryToken},hasProducts:Object.keys(state.products)});
+  }
+  if(req.method==='GET'&&path==='/local/usage') {
+    try{return send(res,200,await fetchLicenseUsage({key,settings:await readSettings(key),state:await readState(key)}));}
+    catch(error){return send(res,502,{error:error.message||'Could not load download statistics.'});}
   }
   if(req.method!=='POST')return send(res,405,{error:'Method not allowed.'});
   const data=await body(req);
@@ -96,7 +101,7 @@ async function admin(req,res,path) {
     if(!/^[\w./-]+$/.test(data.branch||'main'))throw Error('Invalid branch.');
     const old=await readSettings(key),token=data.token||old.token;
     if(!token)throw Error('A fine-grained GitHub token is required.');
-    await writeSettings({repository:data.repository,branch:data.branch||'main',token,deliveryToken:data.deliveryToken||old.deliveryToken||''},key);
+    await writeSettings({repository:data.repository,branch:data.branch||'main',token,deliveryToken:data.deliveryToken||old.deliveryToken||'',storefrontUrl:storefrontUrl(data.storefrontUrl||old.storefrontUrl||defaultStorefront)},key);
     return send(res,200,{message:'Settings encrypted and saved on this computer.'});
   }
   if(path==='/local/sync')return send(res,200,await syncVault(await readSettings(key)));
@@ -124,6 +129,7 @@ export const handler=async(req,res)=>{
     if(req.headers.origin&&req.headers.origin!==origin)return send(res,403,{error:'Invalid origin.'});
     if(req.method!=='GET'&&req.method!=='HEAD'&&req.headers['sec-fetch-site']==='cross-site')return send(res,403,{error:'Cross-site request denied.'});
     const path=new URL(req.url,origin).pathname;
+    if(path==='/local/usage'&&req.method==='GET')return await admin(req,res,path);
     if(path.startsWith('/local/'))return await serialize(()=>admin(req,res,path));
     if(path==='/api/download'&&req.method==='POST')return await serialize(()=>localDownload(req,res));
     if(req.method!=='GET'&&req.method!=='HEAD')return send(res,405,{error:'Method not allowed.'});

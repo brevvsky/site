@@ -1,7 +1,10 @@
 import { decrypt, decode, hashCode } from '../shared/crypto.mjs';
+import { verifyOwner } from '../shared/owner-auth.mjs';
+import { usageRequest, ownerUsage } from './usage.mjs';
+export { LicenseUsageStore } from './usage.mjs';
 const idPattern = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const filePattern = /^[a-f0-9-]{36}$/;
-export const DELIVERY_VERSION = '3';
+export const DELIVERY_VERSION = '4';
 const security = {'X-Asset-Delivery-Version':DELIVERY_VERSION,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json = (data,status=200) => new Response(JSON.stringify(data),{status,headers:{...security,'Content-Type':'application/json'}});
 const unavailable = code => json({error:'Download is temporarily unavailable. Please try again or contact the creator.',code},503);
@@ -31,6 +34,8 @@ export async function deliver(request, env, fetcher = fetch) {
   const reader=request.body?.getReader();let text='';const decoder=new TextDecoder();let length=0;
   if(reader)while(true){const {value,done}=await reader.read();if(done)break;length+=value.byteLength;if(length>1024){await reader.cancel();return json({error:'Request is too large.'},413);}text+=decoder.decode(value,{stream:true});}
   text+=decoder.decode();
+  const probe=request.headers.get('X-Owner-Probe')==='1';
+  if(probe&&!await verifyOwner(request,text,env.VAULT_KEY))return json({error:'Owner authentication required.'},401);
   let body; try{body=JSON.parse(text);}catch{return json({error:'Invalid request.'},400);}
   if(!body || typeof body!=='object' || !idPattern.test(body.productId || '') || typeof body.code !== 'string' || body.code.length>128) return json({error:'Invalid asset or access code.'},400);
   let stage = 'INDEX_READ';
@@ -52,7 +57,12 @@ export async function deliver(request, env, fetcher = fetch) {
     stage = 'FILE_DECRYPT';
     const bytes=await decrypt(fileText,env.VAULT_KEY,`file:${file}`);
     stage = 'DOWNLOAD_RESPONSE';
-    return new Response(bytes,{headers:{...security,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename="${body.productId}${index.extension}"`}});
+    const download=new Response(bytes,{headers:{...security,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename="${body.productId}${index.extension}"`}});
+    if(index.access==='paid'&&!probe) {
+      stage='USAGE_WRITE';
+      await usageRequest(env,'/record',{hash:await hashCode(body.productId,body.code)});
+    }
+    return download;
   } catch(error) {
     if(stage==='INDEX_READ' && error.status===404)return json({error:'Asset or license unavailable.'},403);
     return unavailable(stage==='INDEX_READ' || stage==='FILE_READ' ? storageCode(stage,error) : stage);
@@ -60,6 +70,7 @@ export async function deliver(request, env, fetcher = fetch) {
 }
 export default {async fetch(request,env) {
   const path=new URL(request.url).pathname;
+  if(path==='/api/owner/usage')return ownerUsage(request,env);
   if(path==='/api/download') return deliver(request,env);
   if(path.startsWith('/api/') || /^\/(admin|local)(\/|$)/.test(path)) return json({error:'Not found.'},404);
   return env.ASSETS.fetch(request);

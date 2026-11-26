@@ -105,6 +105,18 @@ Back up the entire `.private` directory to storage you control, especially `vaul
 
 The current Local Studio edits its local snapshot. On a new computer, restore your backed-up `.private` directory and the same public catalog/uploads before using the panel. It does not automatically pull and reconcile remote vault changes. Use one writer computer at a time. A restored stale snapshot could reinstate old license settings on the next sync.
 
+## License download counts
+
+Local Studio displays **Downloads** and **Last download** on each license card. Counts load when the license list opens and can be updated with **Refresh download counts**. If retrieval fails, the panel shows an error and leaves unknown counts unavailable instead of claiming zero. Set **Published website URL** in the panel settings if your production URL differs from the provided workers.dev address.
+
+Deploy the update with `npm.cmd run deploy`, then restart Local Studio (`Ctrl+C`, followed by `npm.cmd start`) and open its new private launch URL. Wrangler provisions the `LicenseUsageStore` SQLite Durable Object from the supplied binding and migration; no separate database or new secret is needed. Keep that binding, class name, and migration stable on later deployments so counters remain accessible. SQLite Durable Objects are supported on Cloudflare's free Workers plan, subject to the provider's usage limits.
+
+Only a successfully authorized, decrypted, server-issued **paid** asset download increments its key's count. Invalid/revoked/expired keys, storage failures, free assets, local preview downloads, and signed owner diagnostic probes do not count. The counter is committed before the successful response is released; if the counter cannot be recorded, the download returns a service error. A count indicates that the server issued a copy; it cannot prove that the browser finished saving it or that a model was used in Roblox. Historical downloads from before this update are unavailable.
+
+Counts are per product and exact key. Editing buyer notes or an expiry preserves the count; replacing the actual key starts a new key's count. Counts persist outside the local panel and survive storefront deployments. Cloudflare stores only a one-way license digest, a count, and the last delivery timestamp: no raw license codes, buyer names, IPs, or model contents. The owner stats endpoint requires a short-lived request signature derived from the private vault key. Signing happens in the local Node process; the browser never receives the vault key. There is no public endpoint for changing the counters or viewing them without owner authentication.
+
+Tests include concurrent real SQLite counter updates inside workerd, successful/failed delivery accounting, signed diagnostic exclusion, private owner access, and the local panel's authenticated statistics route.
+
 ## Validation
 
 If a licensed download returns a temporary-unavailability error, run:

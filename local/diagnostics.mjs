@@ -1,5 +1,6 @@
 import { decrypt, decode, hashCode } from '../shared/crypto.mjs';
 import { githubRead } from '../worker/index.mjs';
+import { ownerHeaders } from '../shared/owner-auth.mjs';
 
 export function storageHint(status) {
   if (status === 401) return 'Delivery token is invalid or expired. Replace it in Local Studio and run npm run publish.';
@@ -20,6 +21,7 @@ export function workerHint(code) {
   if(/^(INDEX|FILE)_READ_NETWORK$/.test(code))return 'The Cloudflare Worker failed while fetching private storage. The local GitHub checks passed; inspect the Worker fetch configuration.';
   if(/^(INDEX|FILE)_READ_REDIRECT$/.test(code))return 'GitHub returned an unexpected redirect, which was refused. Check the repository name and branch.';
   if(code==='INDEX_METADATA')return 'The remote license index has invalid metadata.';
+  if(code==='USAGE_WRITE')return 'Cloudflare could not save the download count. Deploy the current Worker and its usage storage binding.';
   return 'The Worker returned a delivery error. Share this safe reference with the creator.';
 }
 
@@ -75,10 +77,12 @@ export async function diagnoseDelivery({key, settings, state, siteUrl, fetcher =
   try {
     const endpoint = new URL('/api/download', siteUrl);
     if (endpoint.protocol !== 'https:' || !endpoint.hostname.endsWith('.workers.dev')) throw Error('Invalid diagnostic destination.');
-    const response = await timedFetch(endpoint.href, {method:'POST', redirect:'error', cache:'no-store', headers:{'Content-Type':'application/json','User-Agent':'brevvsky-owner-diagnostics'}, body:JSON.stringify({productId, code:index.access === 'free' ? '' : license.code})});
+    const bodyText=JSON.stringify({productId,code:index.access==='free'?'':license.code});
+    const auth=await ownerHeaders(key,endpoint.pathname,bodyText);
+    const response = await timedFetch(endpoint.href, {method:'POST', redirect:'manual', cache:'no-store', headers:{'Content-Type':'application/json','User-Agent':'brevvsky-owner-diagnostics','X-Owner-Probe':'1',...auth}, body:bodyText});
     if (!response.ok) {
       const body=await response.json().catch(()=>({}));
-      const safeCode=/^(CONFIG_(SECRETS|REPOSITORY|LIMITER)|INDEX_(READ_(401|403|404|429|NETWORK|REDIRECT)|DECRYPT|METADATA)|FILE_(READ_(401|403|404|429|NETWORK|REDIRECT)|DECRYPT)|DOWNLOAD_RESPONSE)$/.test(body?.code || '')?body.code:null;
+      const safeCode=/^(CONFIG_(SECRETS|REPOSITORY|LIMITER)|INDEX_(READ_(401|403|404|429|NETWORK|REDIRECT)|DECRYPT|METADATA)|FILE_(READ_(401|403|404|429|NETWORK|REDIRECT)|DECRYPT)|DOWNLOAD_RESPONSE|USAGE_WRITE)$/.test(body?.code || '')?body.code:null;
       const hint=safeCode?`[${safeCode}] ${workerHint(safeCode)}`:response.status===429?'Download attempts are rate limited; wait a minute.':response.headers.get('X-Asset-Delivery-Version')?'The Worker returned an error without a delivery reference.':'The deployed Worker predates detailed diagnostics. Run npm run publish to deploy the updated Worker and secrets, then diagnose again.';
       result('Cloudflare download', false, `HTTP ${response.status}. ${hint}`);
       return false;
